@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>e-Tally Card (KEW.PS-4)</title>
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <style>
+    body { font-family: sans-serif; margin: 20px; background-color: #f8f9fa; }
+    .container { max-width: 1000px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    .header { text-align: center; margin-bottom: 20px; }
+    .header img { width: 120px; height: auto; margin-bottom: 10px; border-radius: 50%; }
+    h1 { color: #007bff; font-size: 1.8em; margin-bottom: 5px; }
+    h2 { color: #6c757d; font-size: 1.1em; font-weight: normal; margin-top: 0; }
+    h3 { margin-top: 25px; color: #343a40; border-bottom: 2px solid #007bff; padding-bottom: 5px; font-size: 1.2em; }
+    label { display: block; margin-top: 15px; margin-bottom: 5px; font-weight: bold; }
+    input[type="text"], select { width: 100%; padding: 10px; margin-bottom: 10px; border: 1px solid #ced4da; border-radius: 4px; box-sizing: border-box; }
+    
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; }
+    .scan-input-group { display: flex; align-items: center; }
+    .scan-input-group input { flex-grow: 1; border-right: none; border-radius: 4px 0 0 4px; margin-bottom: 0; }
+    .btn-action { background-color: #007bff; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; height: 41px; }
+    .btn-action:hover { background-color: #0056b3; }
+    .btn-secondary { background-color: #6c757d; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; height: 41px; }
+
+    .item-card { background: #fdfdfd; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; margin-bottom: 12px; }
+    .item-card-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 8px; font-weight: bold; }
+    .item-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; font-size: 0.85em; }
+    .item-grid div { background: #f8fafc; padding: 6px; border-radius: 4px; }
+
+    /* Ledger Table Styling */
+    table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 0.85em; }
+    th, td { border: 1px solid #dee2e6; padding: 8px; text-align: left; }
+    th { background-color: #007bff; color: white; text-align: center; }
+    td.number-col { text-align: right; }
+
+    .action-btns { display: flex; gap: 15px; margin-top: 25px; }
+    .btn-print { background-color: #28a745; color: white; padding: 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 1em; width: 70%; font-weight: bold; }
+    .btn-print:hover { background-color: #218838; }
+    .btn-cancel { background-color: #6c757d; color: white; padding: 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 1em; width: 30%; }
+    .btn-cancel:hover { background-color: #5a6268; }
+
+    #message-area { margin-top: 20px; padding: 12px; border-radius: 4px; text-align: center; display: none; font-weight: bold; }
+    .error { background-color: #ffe6e6; color: red; border: 1px solid red; }
+
+    /* Scanner Modal */
+    .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.8); }
+    .modal-content { background-color: #fefefe; margin: 10% auto; padding: 20px; width: 80%; max-width: 450px; border-radius: 8px; text-align: center; }
+    .close-btn { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
+
+    .footer { margin-top: 40px; padding-top: 15px; border-top: 1px solid #ced4da; font-size: 0.8em; color: #6c757d; text-align: center; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <img src="https://lh3.googleusercontent.com/d/1tCDAMimy_b0x9kRmWNyYMn4voR9Ynr0J" alt="Logo">
+    <h1>e-Tally Card</h1>
+    <h2>Haemodialysis Unit, Sarawak General Hospital</h2>
+  </div>
+
+  <!-- Search & Select Section -->
+  <div class="grid-3">
+    <div>
+      <label for="itemDropdown">Select Item Name</label>
+      <select id="itemDropdown" onchange="onDropdownSelect(this.value)">
+        <option value="" selected>-- Loading Catalogue... --</option>
+      </select>
+    </div>
+    <div>
+      <label for="searchKeyword">Search Item by Name</label>
+      <div class="scan-input-group">
+        <input type="text" id="searchKeyword" placeholder="Key in name...">
+        <button type="button" class="btn-action" onclick="searchCatalogue()">🔍</button>
+      </div>
+    </div>
+    <div>
+      <label>Scan QR Code</label>
+      <button type="button" class="btn-secondary" style="width: 100%;" onclick="startScanner()">📷 Scan Product QR</button>
+    </div>
+  </div>
+
+  <!-- Search Results Section -->
+  <div id="searchResultsSection" style="display: none;">
+    <h3>Search Results</h3>
+    <div id="searchResultsContainer"></div>
+  </div>
+
+  <!-- Active Item Details & Tally Card Section -->
+  <div id="tallyCardSection" style="display: none;">
+    <h3>e-Tally Card (KEW.PS-4)</h3>
+    <div class="item-card">
+      <div class="item-grid">
+        <div><label>Nama Item:</label><br><b id="cardNamaItem">-</b></div>
+        <div><label>Item Kod Baru:</label><br><b id="cardKodBaru">-</b></div>
+        <div><label>Deskripsi Pembungkusan:</label><br><span id="cardDeskripsi">-</span></div>
+        <div><label>SKU Pembekalan:</label><br><span id="cardSku">-</span></div>
+      </div>
+    </div>
+
+    <!-- Tally Ledger Table -->
+    <table>
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Received From / Issued To</th>
+          <th>Ref / SIV No.</th>
+          <th>Total In</th>
+          <th>Price (RM)</th>
+          <th>Total Out</th>
+          <th>Balance</th>
+          <th>Staff Name</th>
+        </tr>
+      </thead>
+      <tbody id="tallyTableBody">
+        <tr><td colspan="8" style="text-align:center;">Loading ledger history...</td></tr>
+      </tbody>
+    </table>
+
+    <div class="action-btns">
+      <button type="button" class="btn-print" id="printBtn" onclick="exportToPdf()">Print Tally Card (PDF)</button>
+      <button type="button" class="btn-cancel" onclick="resetForm()">Reset Form</button>
+    </div>
+  </div>
+
+  <div id="message-area"></div>
+
+  <div class="footer">
+    &copy; Designed and developed by PPP Zulfadlie bin Janie<br>
+    for Haemodialysis Unit, Sarawak General Hospital
+  </div>
+</div>
+
+<!-- QR Scanner Modal -->
+<div id="scannerModal" class="modal">
+  <div class="modal-content">
+    <span class="close-btn" onclick="stopScanner()">&times;</span>
+    <h2>Scan Item QR Code</h2>
+    <div id="reader-modal" style="width: 100%;"></div>
+  </div>
+</div>
+
+<script>
+  const SCRIPT_API_URL = "https://script.google.com/macros/s/AKfycbyGAnVBVbeD4J4II1gsyDPdv-mOYJFLmKsj5nwg1rBz9uZCN6y7uQyttP9GTQBGmkDj-g/exec";
+  let fullCatalogue = [];
+  let html5QrCode = null;
+  let activeItem = null;
+  let currentTransactions = [];
+
+  window.onload = function() { loadCatalogue(); };
+
+  function loadCatalogue() {
+    fetch(`${SCRIPT_API_URL}?action=getCatalogue`)
+      .then(res => res.json())
+      .then(res => {
+        if (res.success) {
+          fullCatalogue = res.data;
+          const dropdown = document.getElementById('itemDropdown');
+          dropdown.innerHTML = '<option value="" disabled selected>-- Select Item --</option>';
+          fullCatalogue.forEach((item, index) => {
+            const opt = document.createElement('option');
+            opt.value = index;
+            opt.textContent = item.namaItem;
+            dropdown.appendChild(opt);
+          });
+        }
+      });
+  }
+
+  function onDropdownSelect(indexStr) {
+    if (indexStr === "") return;
+    selectItem(fullCatalogue[parseInt(indexStr)]);
+  }
+
+  function searchCatalogue() {
+    const kw = document.getElementById('searchKeyword').value.trim().toLowerCase();
+    if (!kw) return;
+    const results = fullCatalogue.filter(item => item.namaItem.toLowerCase().includes(kw));
+    displaySearchResults(results);
+  }
+
+  function displaySearchResults(results) {
+    const container = document.getElementById('searchResultsContainer');
+    container.innerHTML = "";
+    results.forEach(item => {
+      const card = document.createElement('div');
+      card.className = "item-card";
+      card.innerHTML = `
+        <div class="item-card-header">
+          <span>${item.namaItem}</span>
+          <button type="button" class="btn-action" onclick='selectItem(${JSON.stringify(item).replace(/'/g, "&apos;")})'>Select Item</button>
+        </div>
+        <div class="item-grid">
+          <div><label>Kod Baru:</label><br><b>${item.kodBaru}</b></div>
+          <div><label>Deskripsi:</label><br>${item.deskripsiPembungkusan || '-'}</div>
+        </div>
+      `;
+      container.appendChild(card);
+    });
+    document.getElementById('searchResultsSection').style.display = 'block';
+  }
+
+  function selectItem(item) {
+    activeItem = item;
+    document.getElementById('searchResultsSection').style.display = 'none';
+    document.getElementById('cardNamaItem').textContent = item.namaItem;
+    document.getElementById('cardKodBaru').textContent = item.kodBaru;
+    document.getElementById('cardDeskripsi').textContent = item.deskripsiPembungkusan || '-';
+    document.getElementById('cardSku').textContent = item.skuPembekalan || '-';
+    document.getElementById('tallyCardSection').style.display = 'block';
+
+    // Fetch Tally Ledger Data
+    fetch(`${SCRIPT_API_URL}?action=getTallyCardData&kodBaru=${encodeURIComponent(item.kodBaru)}`)
+      .then(res => res.json())
+      .then(res => {
+        const tbody = document.getElementById('tallyTableBody');
+        tbody.innerHTML = "";
+        if (res.success && res.data.length > 0) {
+          currentTransactions = res.data;
+          res.data.forEach(row => {
+            tbody.innerHTML += `
+              <tr>
+                <td>${row.date}</td>
+                <td>${row.receivedIssued}</td>
+                <td>${row.refNo}</td>
+                <td class="number-col">${row.totalIn}</td>
+                <td class="number-col">${row.price}</td>
+                <td class="number-col">${row.totalOut}</td>
+                <td class="number-col"><b>${row.balance}</b></td>
+                <td>${row.staffName}</td>
+              </tr>
+            `;
+          });
+        } else {
+          currentTransactions = [];
+          tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;">No transaction records found for this item.</td></tr>`;
+        }
+      });
+  }
+
+  function exportToPdf() {
+    if (!activeItem) {
+      alert("Please select an item first.");
+      return;
+    }
+
+    const btn = document.getElementById('printBtn');
+    btn.disabled = true;
+    btn.textContent = "Generating KEW.PS-4 PDF...";
+
+    const payload = {
+      kodBaru: activeItem.kodBaru,
+      namaItem: activeItem.namaItem,
+      transactions: currentTransactions
+    };
+
+    fetch(SCRIPT_API_URL, {
+      method: "POST",
+      body: JSON.stringify({
+        action: "exportTallyCardPdf",
+        payload: payload
+      })
+    })
+    .then(res => res.json())
+    .then(res => {
+      btn.disabled = false;
+      btn.textContent = "Print Tally Card (PDF)";
+      if (res.success && res.pdfUrl) {
+        window.open(res.pdfUrl, "_blank");
+      } else {
+        alert("Failed to generate PDF: " + res.error);
+      }
+    })
+    .catch(err => {
+      btn.disabled = false;
+      btn.textContent = "Print Tally Card (PDF)";
+      alert("Error exporting PDF: " + err);
+    });
+  }
+
+  function resetForm() {
+    activeItem = null;
+    currentTransactions = [];
+    document.getElementById('tallyCardSection').style.display = 'none';
+    document.getElementById('searchResultsSection').style.display = 'none';
+    document.getElementById('itemDropdown').selectedIndex = 0;
+    document.getElementById('searchKeyword').value = '';
+  }
+
+  function startScanner() {
+    document.getElementById('scannerModal').style.display = 'block';
+    if (!html5QrCode) html5QrCode = new Html5Qrcode("reader-modal");
+    html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 220 }, (text) => {
+      stopScanner();
+      const matched = fullCatalogue.find(i => i.kodBaru.toLowerCase() === text.trim().toLowerCase());
+      if (matched) selectItem(matched); else alert("Item code not found in catalogue!");
+    });
+  }
+
+  function stopScanner() {
+    if (html5QrCode && html5QrCode.isScanning) html5QrCode.stop();
+    document.getElementById('scannerModal').style.display = 'none';
+  }
+</script>
+</body>
+</html>
